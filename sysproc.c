@@ -6,6 +6,52 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
+#include "pstat.h"
+#include "spinlock.h" 
+
+extern struct {
+  struct spinlock lock;
+  struct proc proc[NPROC];
+} ptable;
+
+
+
+int sys_getpinfo(void) {
+    pstatTable *pstat;
+    
+    
+    if (argptr(0, (void*)&pstat, sizeof(pstatTable)) < 0)
+        return -1;
+    
+    fillpstat(pstat);
+    
+    return 0;  
+}
+
+int
+sys_settickets(void)
+{
+  int n;
+
+  
+  if(argint(0, &n) < 0)
+    return -1;
+
+  if(n < 10)
+    return -1;
+
+  struct proc *curproc = myproc();
+  if(curproc == 0)
+    return -1;
+
+  
+  curproc->tickets = n;
+  return 0;
+}
+
+
+
+
 
 int
 sys_fork(void)
@@ -89,3 +135,4 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+

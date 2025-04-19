@@ -3,6 +3,39 @@
 #include "fcntl.h"
 #include "user.h"
 #include "x86.h"
+#include "pstat.h"
+#include "syscall.h"
+
+
+
+void ps(void) {
+  pstatTable ptable;
+  int i; 
+  getpinfo(&ptable);  // Calling the kernel function to get process infomation
+  
+  printf(1, "PID\tTKTS\tTCKS\tSTAT\tNAME\n");
+    for (i = 0; i < NPROC; i++) {
+        if (ptable[i].inuse) {
+            char stat = '?';
+            switch (ptable[i].state) {
+                case 1: stat = 'E'; break; // EMBRYO
+                case 2: stat = 'S'; break; // SLEEPING
+                case 3: stat = 'A'; break; // RUNNABLE
+                case 4: stat = 'R'; break; // RUNNING
+                case 5: stat = 'Z'; break; // ZOMBIE
+                default: stat = '?';
+            }
+
+            printf(1, "%d\t%d\t%d\t%c\t%s\n",
+                   ptable[i].pid,
+                   ptable[i].tickets,
+                   ptable[i].ticks,
+                   stat,
+                   ptable[i].name);
+        }
+    }
+}
+
 
 char*
 strcpy(char *s, const char *t)

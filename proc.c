@@ -6,11 +6,43 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "pstat.h"
+
+#define RAND_MAX ((1U << 31) - 1)
+static int rseed = 1898888478;
+
+int random()
+{
+  return rseed = (rseed * 1103515245 + 12345) & RAND_MAX;
+}
+
+
 
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
 } ptable;
+
+
+void fillpstat(pstatTable *pstat) {
+    int i;
+    struct proc *p;
+
+    acquire(&ptable.lock);
+    for (i = 0; i < NPROC; i++) {
+        p = &ptable.proc[i];
+        if (p->state == UNUSED)
+            continue;
+        (*pstat)[i].pid = p->pid;
+        (*pstat)[i].tickets = p->tickets;
+        (*pstat)[i].ticks = p->ticks;
+        (*pstat)[i].state = p->state;
+        (*pstat)[i].inuse = 1;
+        safestrcpy((*pstat)[i].name, p->name, sizeof((*pstat)[i].name));
+    }
+    release(&ptable.lock);
+}
+
 
 static struct proc *initproc;
 
@@ -88,6 +120,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->tickets = 10; //default number of tickets
 
   release(&ptable.lock);
 
@@ -123,8 +156,10 @@ userinit(void)
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
-  p = allocproc();
-  
+  p = allocproc(); //allocates and initializes a process structure
+
+  p->ticks = 0;
+  p->tickets = 10;
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
@@ -188,6 +223,10 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
+
+  np->ticks = 0;
+  np->tickets = curproc->tickets; //inherit tickets from parent
+
 
   // Copy process state from proc.
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
@@ -319,41 +358,70 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
+
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
-  for(;;){
-    // Enable interrupts on this processor.
-    sti();
 
-    // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
+  for(;;){
+    sti(); 
+
+    acquire(&ptable.lock); 
+
+    //Calculates total tickets for RUNNABLE processes
+    int total_tickets = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state == RUNNABLE){
+        total_tickets += p->tickets;
+      }
+    }
+
+    // no RUNNABLE processes then skip the scheduling
+    if(total_tickets == 0){
+      release(&ptable.lock);
+      continue;
+    }
+
+    // random winning ticket 
+    int winner_ticket = random() % total_tickets;
+
+    // Find winning process
+    int current_ticket_sum = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+      current_ticket_sum += p->tickets;
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+      if(current_ticket_sum > winner_ticket){
+   
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
+        
+        c->proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+
+        
+        swtch(&(c->scheduler), p->context);
+        switchkvm();
+
+        
+        p->ticks++;
+
+      
+        c->proc = 0;
+
+        break;  
+      }
     }
-    release(&ptable.lock);
 
+    release(&ptable.lock);  // Unlock process table
   }
 }
+
 
 // Enter scheduler.  Must hold only ptable.lock
 // and have changed proc->state. Saves and restores
@@ -532,3 +600,53 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+// int
+// settickets(int number)
+// {
+//   struct proc *curproc = myproc();
+
+//   if (number < 10) {
+//     return -1;
+//   }
+
+//   // Optional: check if the proc exists in your pstat table, if needed
+//   curproc->tickets = number;
+//   return 0;
+// }
+
+
+// int
+// settickets(int number)
+// {
+//   struct proc *p;
+  
+//   if(number < 10)  // Minimum ticket count is 10
+//     return -1;
+  
+//   // Get current process
+//   p = myproc();
+//   if(p == 0)
+//     return -1;
+  
+//   // Check if process exists in ptable
+//   acquire(&ptable.lock);
+//   int found = 0;
+//   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+//     if(p->pid == myproc()->pid && p->state != UNUSED) {
+//       found = 1;
+//       break;
+//     }
+//   }
+//   release(&ptable.lock);
+  
+//   if(!found)
+//     return -1;
+  
+//   // Set the tickets
+//   acquire(&ptable.lock);
+//   myproc()->tickets = number;
+//   release(&ptable.lock);
+  
+//   return 0;
+// }

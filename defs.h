@@ -1,3 +1,4 @@
+#include "pstat.h"
 struct buf;
 struct context;
 struct file;
@@ -9,6 +10,8 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct pstat;
+
 
 // bio.c
 void            binit(void);
@@ -120,6 +123,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+void             getpinfo(pstatTable*);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

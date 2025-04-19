@@ -1,3 +1,10 @@
+#ifdef X86
+#include "x86.h"
+#endif
+#include "pstat.h"
+
+
+
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -49,10 +56,15 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int tickets;                 //the number of tickets for lottery scheduling
+  int ticks;                   //the number of times scheduled
 };
-
 // Process memory is laid out contiguously, low addresses first:
 //   text
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+
+void fillpstat(pstatTable *pstat);
+
+int settickets(int number);

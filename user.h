@@ -1,5 +1,7 @@
+#include "pstat.h"
 struct stat;
 struct rtcdate;
+// struct pstat_t;
 
 // system calls
 int fork(void);
@@ -24,6 +26,8 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 
+
+
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);
@@ -37,3 +41,5 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+void ps(void);
+int settickets(int);
